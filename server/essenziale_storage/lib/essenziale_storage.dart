@@ -25,36 +25,36 @@ void main() async {
   });
 
   router.post('/api/upload/photos', (Request request) async {
+    List<String> fileNames = [];
     if (request.formData() case var formData?) {
-      List<int>? fileBytes;
-      String? nameFile;
-
       await for (final field in formData.formData) {
         if (field.name == 'file') {
-          RegExp r = RegExp(r'filename="([^"]+)"');
-          Match? match = r.firstMatch(
-            field.part.headers['content-disposition']!,
-          );
+          final contentDisposition = field.part.headers['content-disposition'];
+          if (contentDisposition == null) continue;
 
-          if (match != null && match.group(1) != null) {
-            nameFile = match.group(1)!;
+          RegExp r = RegExp(r'filename="([^"]+)"');
+          Match? match = r.firstMatch(contentDisposition);
+
+          if (match == null || match.group(1) == null) {
+            continue;
           }
 
-          fileBytes = await field.part.readBytes();
-          break;
+          final nameFile = match.group(1)!;
+          final fileBytes = await field.part.readBytes();
+          final File file = File('assets/${nameFile.replaceFirst('/', '.')}');
+
+          await file.parent.create(recursive: true);
+          await file.writeAsBytes(fileBytes);
+
+          fileNames.add(nameFile);
         }
       }
 
-      if (fileBytes == null) {
+      if (fileNames.isEmpty) {
         return Response(400, body: 'No file uploaded');
       }
 
-      final File file = File('assets/${nameFile!.replaceFirst('/', '.')}');
-
-      await file.parent.create(recursive: true);
-      await file.writeAsBytes(fileBytes);
-
-      return Response.ok('Received file: $fileBytes');
+      return Response.ok('Received file: $fileNames');
     }
   });
 
