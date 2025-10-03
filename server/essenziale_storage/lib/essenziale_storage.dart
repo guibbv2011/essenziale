@@ -57,7 +57,40 @@ void main() async {
     return Response.ok('Response: $media');
   });
 
+  router.get('/api/<adminId>/<index>/<file>', (
+    Request request,
+    String adminId,
+    String index,
+    String file,
+  ) async {
+    final admin = AdminUserExt.fromId(adminId);
+    if (admin == null) {
+      return Response(
+        403,
+        body: jsonEncode({'error': 'Unauthorized admin: $adminId'}),
+      );
+    }
+
+    final intIndex = int.tryParse(index);
+    if (intIndex == null || intIndex < 1) {
+      return Response(
+        400,
+        body: jsonEncode({
+          'error': 'Invalid index: $index (must be positive integer)',
+        }),
+      );
+    }
+
+    File el = File('./assets/${admin.id}/$index/$file');
+    if (!await el.exists()) {
+      return Response(
+        403,
+        body: jsonEncode({'error': 'File not found: $file'}),
+      );
+    }
+    return Response.ok(el.openRead());
   });
+
   router.post('/api/<adminId>/<index>/media', (
     Request request,
     String adminId,
