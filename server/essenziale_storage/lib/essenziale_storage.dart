@@ -40,6 +40,19 @@ void main() async {
     String adminId,
     String index,
   ) async {
+    const maxTotalSize = 250 * 1024 * 1024; // 250MB total for request
+
+    final totalContentLength = request.headers['content-length'];
+    final totalSize = int.tryParse(totalContentLength ?? '0');
+    if (totalSize != null && totalSize > maxTotalSize) {
+      return Response(
+        413,
+        body: jsonEncode({
+          'error': 'Total upload size exceeds $maxTotalSize bytes',
+        }),
+      );
+    }
+
     final admin = AdminUserExt.fromId(adminId);
     if (admin == null) {
       return Response(
@@ -76,7 +89,10 @@ void main() async {
             'assets/${admin.id}/$index/${nameFile.replaceFirst('/', '.')}',
           );
           await file.parent.create(recursive: true);
-          await file.writeAsBytes(fileBytes);
+
+          final sink = file.openWrite();
+          await field.part.pipe(sink);
+          await sink.close();
 
           fileNames.add(nameFile);
         }
