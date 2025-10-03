@@ -24,6 +24,37 @@ void main() async {
 
   final router = Router();
 
+  /// Working as fetch
+  router.get('/api/<adminId>/<index>/filenames', (
+    Request request,
+    String adminId,
+    String index,
+  ) async {
+    final admin = AdminUserExt.fromId(adminId);
+    if (admin == null) {
+      return Response(
+        403,
+        body: jsonEncode({'error': 'Unauthorized admin: $adminId'}),
+      );
+    }
+
+    final intIndex = int.tryParse(index);
+    if (intIndex == null || intIndex < 1) {
+      return Response(
+        400,
+        body: jsonEncode({
+          'error': 'Invalid index: $index (must be positive integer)',
+        }),
+      );
+    }
+
+    List<String> media = [];
+
+    Directory dir = Directory('./assets/${admin.id}/$index');
+    await for (var el in dir.list(recursive: false, followLinks: false)) {
+      media.add(el.uri.path.replaceAll('assets/${admin.id}/$index/', ''));
+    }
+    return Response.ok('Response: $media');
   });
 
   });
