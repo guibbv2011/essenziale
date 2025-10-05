@@ -1,19 +1,60 @@
-import 'dart:convert';
 import 'dart:io';
-import 'package:collection/collection.dart';
+
+import 'package:essenziale_storage/routers/get_file.dart';
+import 'package:essenziale_storage/routers/get_filenames.dart';
+import 'package:essenziale_storage/routers/post_files.dart';
+// import 'package:googleapis/storage/v1.dart';
+// import 'package:googleapis_auth/auth_io.dart' as auth;
+// import 'package:path/path.dart' as p;
 import 'package:shelf/shelf.dart';
 import 'package:shelf/shelf_io.dart';
 import 'package:shelf_router/shelf_router.dart';
-import 'package:shelf_multipart/shelf_multipart.dart';
 
-enum AdminUsers { admin1, admin2, admin3, admin4, admin5 }
+final filenamesHandler = filenamesRequest;
+Router get router {
+  final handler = Router();
 
-extension AdminUserExt on AdminUsers {
-  String get id => name;
+  handler.all('/api/<adminId>/<index>/<path>', (
+    Request request,
+    String adminId,
+    String index,
+    String path,
+  ) async {
+    final newHeaders = {
+      ...request.headers,
+      'x-adminId': adminId,
+      'x-index': index,
+      'x-path': path,
+    };
 
-  static AdminUsers? fromId(String id) {
-    return AdminUsers.values.firstWhereOrNull((admin) => admin.id == id);
-  }
+    final originalUri = request.requestedUri;
+    final newUri = originalUri.replace(
+      scheme: originalUri.scheme,
+      userInfo: originalUri.userInfo,
+      host: originalUri.host,
+      port: originalUri.port,
+
+      pathSegments: [path],
+      queryParameters: originalUri.queryParameters,
+
+      fragment: originalUri.fragment,
+    );
+    final subReq = Request(
+      request.method,
+      newUri,
+      headers: newHeaders,
+      body: await request.read(),
+      context: request.context,
+    );
+    return switch (path) {
+      'filenames' => await filenamesHandler(subReq),
+      'media' => await filesUpload(subReq),
+      _ when RegExp(r'.*').hasMatch(path) => fileRequest(subReq),
+      _ => Response.notFound('error'),
+    };
+  });
+
+  return handler;
 }
 
 void main() async {
@@ -22,149 +63,14 @@ void main() async {
     await Directory('./assets').create();
   }
 
-  final router = Router();
-
-  /// Working as fetch
-  router.get('/api/<adminId>/<index>/filenames', (
-    Request request,
-    String adminId,
-    String index,
-  ) async {
-    final admin = AdminUserExt.fromId(adminId);
-    if (admin == null) {
-      return Response(
-        403,
-        body: jsonEncode({'error': 'Unauthorized admin: $adminId'}),
-      );
-    }
-
-    final intIndex = int.tryParse(index);
-    if (intIndex == null || intIndex < 1) {
-      return Response(
-        400,
-        body: jsonEncode({
-          'error': 'Invalid index: $index (must be positive integer)',
-        }),
-      );
-    }
-
-    List<String> media = [];
-
-    Directory dir = Directory('./assets/${admin.id}/$index');
-    await for (var el in dir.list(recursive: false, followLinks: false)) {
-      media.add(el.uri.path.replaceAll('assets/${admin.id}/$index/', ''));
-    }
-    return Response.ok('Response: $media');
-  });
-
-  router.get('/api/<adminId>/<index>/<file>', (
-    Request request,
-    String adminId,
-    String index,
-    String file,
-  ) async {
-    final admin = AdminUserExt.fromId(adminId);
-    if (admin == null) {
-      return Response(
-        403,
-        body: jsonEncode({'error': 'Unauthorized admin: $adminId'}),
-      );
-    }
-
-    final intIndex = int.tryParse(index);
-    if (intIndex == null || intIndex < 1) {
-      return Response(
-        400,
-        body: jsonEncode({
-          'error': 'Invalid index: $index (must be positive integer)',
-        }),
-      );
-    }
-
-    File el = File('./assets/${admin.id}/$index/$file');
-    if (!await el.exists()) {
-      return Response(
-        403,
-        body: jsonEncode({'error': 'File not found: $file'}),
-      );
-    }
-    return Response.ok(el.openRead());
-  });
-
-  router.post('/api/<adminId>/<index>/media', (
-    Request request,
-    String adminId,
-    String index,
-  ) async {
-    const maxTotalSize = 250 * 1024 * 1024; // 250MB total for request
-
-    final totalContentLength = request.headers['content-length'];
-    final totalSize = int.tryParse(totalContentLength ?? '0');
-    if (totalSize != null && totalSize > maxTotalSize) {
-      return Response(
-        413,
-        body: jsonEncode({
-          'error': 'Total upload size exceeds $maxTotalSize bytes',
-        }),
-      );
-    }
-
-    final admin = AdminUserExt.fromId(adminId);
-    if (admin == null) {
-      return Response(
-        403,
-        body: jsonEncode({'error': 'Unauthorized admin: $adminId'}),
-      );
-    }
-
-    final intIndex = int.tryParse(index);
-    if (intIndex == null || intIndex < 1) {
-      return Response(
-        400,
-        body: jsonEncode({
-          'error': 'Invalid index: $index (must be positive integer)',
-        }),
-      );
-    }
-
-    List<String> fileNames = [];
-    if (request.formData() case var formData?) {
-      await for (final field in formData.formData) {
-        if (field.name == 'file') {
-          final contentDisposition = field.part.headers['content-disposition'];
-          if (contentDisposition == null) continue;
-          RegExp r = RegExp(r'filename="([^"]+)"');
-          Match? match = r.firstMatch(contentDisposition);
-
-          if (match == null || match.group(1) == null) {
-            continue;
-          }
-          final nameFile = match.group(1)!;
-
-          final File file = File(
-            'assets/${admin.id}/$index/${nameFile.replaceFirst('/', '.')}',
-          );
-          await file.parent.create(recursive: true);
-
-          final sink = file.openWrite();
-          await field.part.pipe(sink);
-          await sink.close();
-
-          fileNames.add(nameFile);
-        }
-      }
-
-      if (fileNames.isEmpty) {
-        return Response(400, body: 'No file uploaded');
-      }
-
-      return Response.ok('Received file\'s: $fileNames');
-    }
-  });
+  // final client = await auth.clientViaMetadataServer();
+  // final bucket = StorageApi(client);
 
   final handler = const Pipeline()
       .addMiddleware(logRequests())
-      .addHandler(router.call);
+      .addHandler(router);
 
   await serve(handler, 'localhost', 8080);
 }
+
+
