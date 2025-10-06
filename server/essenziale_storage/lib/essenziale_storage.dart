@@ -3,58 +3,23 @@ import 'dart:io';
 import 'package:essenziale_storage/routers/get_file.dart';
 import 'package:essenziale_storage/routers/get_filenames.dart';
 import 'package:essenziale_storage/routers/post_files.dart';
-// import 'package:googleapis/storage/v1.dart';
-// import 'package:googleapis_auth/auth_io.dart' as auth;
-// import 'package:path/path.dart' as p;
 import 'package:shelf/shelf.dart';
 import 'package:shelf/shelf_io.dart';
-import 'package:shelf_router/shelf_router.dart';
+import 'package:shelf_dynamic_forwarder/shelf_dynamic_forwarder.dart';
 
-final filenamesHandler = filenamesRequest;
-Router get router {
-  final handler = Router();
+final Map<String, Handler> dynamicRoutes = {
+  'filenames': filenamesRequest,
+  'media': filesUpload,
+  '.*': fileRequest,
+};
 
-  handler.all('/api/<adminId>/<index>/<path>', (
-    Request request,
-    String adminId,
-    String index,
-    String path,
-  ) async {
-    final newHeaders = {
-      ...request.headers,
-      'x-adminId': adminId,
-      'x-index': index,
-      'x-path': path,
-    };
+Handler get router {
+  final dynamicRouter = createDynamicRouter(
+    routePattern: '/api/<adminId>/<index>/<path|.*>',
+    routes: dynamicRoutes,
+  );
 
-    final originalUri = request.requestedUri;
-    final newUri = originalUri.replace(
-      scheme: originalUri.scheme,
-      userInfo: originalUri.userInfo,
-      host: originalUri.host,
-      port: originalUri.port,
-
-      pathSegments: [path],
-      queryParameters: originalUri.queryParameters,
-
-      fragment: originalUri.fragment,
-    );
-    final subReq = Request(
-      request.method,
-      newUri,
-      headers: newHeaders,
-      body: await request.read(),
-      context: request.context,
-    );
-    return switch (path) {
-      'filenames' => await filenamesHandler(subReq),
-      'media' => await filesUpload(subReq),
-      _ when RegExp(r'.*').hasMatch(path) => fileRequest(subReq),
-      _ => Response.notFound('error'),
-    };
-  });
-
-  return handler;
+  return dynamicRouter;
 }
 
 void main() async {
@@ -72,5 +37,3 @@ void main() async {
 
   await serve(handler, 'localhost', 8080);
 }
-
-
