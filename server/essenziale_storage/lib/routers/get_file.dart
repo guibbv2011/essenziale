@@ -1,11 +1,12 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:essenziale_storage/admins_extract/admin_ext.dart';
+import 'package:essenziale_storage/database/crud.dart';
 import 'package:shelf/shelf.dart';
 import 'package:shelf_router/shelf_router.dart';
+import 'package:googleapis/storage/v1.dart' as storage;
 
-Router get fileRequest {
+Router fileRequest(storage.StorageApi gcsClient, String bucketName) {
   final handler = Router();
   handler.get('/file', (Request request) async {
     final adminId = request.headers['x-adminId'];
@@ -30,15 +31,18 @@ Router get fileRequest {
       );
     }
 
-    File el = File('./assets/${admin.id}/$index/$file');
-    if (!await el.exists()) {
-      return Response(
-        403,
-        body: jsonEncode({'error': 'File not found: $file'}),
-      );
-    }
-    return Response.ok(el.openRead());
-  });
+    final String remotePathFile = '/${admin.id}/$index/$file';
 
+    GcsStorageService(gcsClient, bucketName)
+        .readFile(remotePathFile)
+        .then(
+          (onValue) {
+            return Response.ok('Response: $onValue');
+          },
+          onError: (e) {
+            return Response.internalServerError(body: 'error: $e');
+          },
+        );
+  });
   return handler;
 }

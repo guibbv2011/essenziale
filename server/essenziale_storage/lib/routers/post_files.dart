@@ -2,11 +2,14 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:essenziale_storage/admins_extract/admin_ext.dart';
+import 'package:essenziale_storage/database/crud.dart';
+// import 'package:path/path.dart' as p;
 import 'package:shelf/shelf.dart';
 import 'package:shelf_multipart/shelf_multipart.dart';
 import 'package:shelf_router/shelf_router.dart';
+import 'package:googleapis/storage/v1.dart' as storage;
 
-Router get filesUpload {
+Router filesUpload(storage.StorageApi gcsClient, String bucketName) {
   final handler = Router();
   handler.post('/media', (Request request) async {
     final adminId = request.headers['x-adminId'];
@@ -58,7 +61,7 @@ Router get filesUpload {
           final nameFile = match.group(1)!;
 
           final File file = File(
-            'assets/${admin.id}/$index/${nameFile.replaceFirst('/', '.')}',
+            'tmp/${admin.id}/$index/${nameFile.replaceFirst('/', '.')}',
           );
           await file.parent.create(recursive: true);
 
@@ -74,10 +77,25 @@ Router get filesUpload {
         return Response(400, body: 'No file uploaded');
       }
 
-      // NOTE :
-      // _uploadFolderAsync(localFolder);
+      final String remotePath = '/${admin.id}/$index';
 
-      return Response.ok('Received file\'s: $fileNames');
+      final Directory dir = Directory('./tmp$remotePath');
+      final String localFolder = dir.path;
+
+      // NOTE : need to receive a return to decide if delete and retry
+      Future<void> _ = GcsStorageService(
+        gcsClient,
+        bucketName,
+      ).uploadDirectory(localFolder, remotePath);
+
+      // Optional: Clean entire folder (delete only after all uploads are complete)
+      try {
+        await dir.delete(recursive: true);
+        print('Successfully deleted folder: $remotePath');
+      } catch (e) {
+        print('Failed to delete folder $remotePath: $e');
+      }
+      return Response.ok('uploaded file\'s: $remotePath');
     }
   });
 

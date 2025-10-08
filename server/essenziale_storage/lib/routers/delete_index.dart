@@ -1,11 +1,12 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:essenziale_storage/admins_extract/admin_ext.dart';
+import 'package:essenziale_storage/database/crud.dart';
 import 'package:shelf/shelf.dart';
 import 'package:shelf_router/shelf_router.dart';
+import 'package:googleapis/storage/v1.dart' as storage;
 
-Router get deleteIndexRequest {
+Router deleteIndexRequest(storage.StorageApi gcsClient, String bucketName) {
   final handler = Router();
   handler.delete('/deleteIndex', (Request req) async {
     final adminId = req.headers['x-adminId'];
@@ -29,19 +30,12 @@ Router get deleteIndexRequest {
       );
     }
 
-    String dirname = '';
+    final String remotePath = '/${admin.id}/$index';
 
-    Directory dir = Directory('./assets/${admin.id}/$index');
-    if (!await dir.exists()) {
-      return Response(403, body: jsonEncode({'error': 'Dir not found: $dir'}));
-    }
+    // NOTE : need a return
+    GcsStorageService(gcsClient, bucketName).deleteFolder(remotePath);
 
-    dirname = dir.path.toString();
-
-    dir.deleteSync(recursive: true);
-    if (!await dir.exists()) {
-      return Response.ok('Response: $dirname successful deleted');
-    }
+    return Response.ok('Response: $remotePath successful deleted');
   });
   return handler;
 }

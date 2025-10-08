@@ -1,11 +1,12 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:essenziale_storage/admins_extract/admin_ext.dart';
+import 'package:essenziale_storage/database/crud.dart';
 import 'package:shelf/shelf.dart';
 import 'package:shelf_router/shelf_router.dart';
+import 'package:googleapis/storage/v1.dart' as storage;
 
-Router get deleteFileRequest {
+Router deleteFileRequest(storage.StorageApi gcsClient, String bucketName) {
   final handler = Router();
   handler.delete('/deleteFile', (Request req) async {
     final adminId = req.headers['x-adminId'];
@@ -30,21 +31,12 @@ Router get deleteFileRequest {
       );
     }
 
-    String media = '';
+    final String remotePathFile = '${admin.id}/$index/$file';
 
-    File el = File('./assets/${admin.id}/$index/$file');
-    if (!await el.exists()) {
-      return Response(
-        403,
-        body: jsonEncode({'error': 'File not found: $file'}),
-      );
-    }
-    media = el.toString();
+    // NOTE : need a return
+    GcsStorageService(gcsClient, bucketName).deleteFile(remotePathFile);
 
-    el.deleteSync();
-    if (!await el.exists()) {
-      return Response.ok('Response: $media successful deleted');
-    }
+    return Response.ok('Response: $file successful deleted');
   });
   return handler;
 }
