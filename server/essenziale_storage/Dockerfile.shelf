@@ -1,0 +1,44 @@
+# FROM google/dart-runtime
+# WORKDIR /app
+# COPY . .
+# RUN dart pub get
+# CMD ["dart", "run", "bin/server.dart"]
+# EXPOSE 8888
+
+
+# Builder Stage: Compiles the Dart application
+FROM dart:stable AS build
+
+WORKDIR /app
+
+# Copy dependencies and get packages
+COPY pubspec.* .
+RUN dart pub get
+
+# Copy source code and compile
+COPY . .
+# Compile the application into a single executable
+RUN dart compile exe bin/server.dart -o bin/server
+
+# Deploy Stage: Minimal runtime environment (scratch base)
+FROM scratch
+
+# Set environment variable for Cloud Run port
+ENV PORT=8080
+# Set the user ID to run the application (best practice)
+ENV DART_USER=2200
+
+# Install necessary libraries (e.g., glibc dependency for compiled executables)
+# The dart:stable base image provides the compiled binary. We use a minimal base.
+# If you run into glibc issues, switch 'scratch' to 'debian:buster-slim' 
+# or a similar minimal base. For standard Dart, 'scratch' is often too minimal.
+# Let's use a minimal glibc-based image to be safe.
+FROM alpine:latest AS runtime
+
+WORKDIR /app
+
+# Copy the compiled executable from the builder stage
+COPY --from=build /runtime/bin/server /usr/bin/server
+
+# Run the executable
+ENTRYPOINT ["/usr/bin/server"]
