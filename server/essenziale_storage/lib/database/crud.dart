@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:typed_data';
+import 'package:googleapis/siteverification/v1.dart';
 import 'package:googleapis/storage/v1.dart' as gcs;
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
@@ -10,23 +11,28 @@ class GcsStorageService {
 
   GcsStorageService(this._storage, this._bucket);
 
-  // Helper: Normalize path to GCS prefix (strip /tmp/ and ensure trailing / for folders)
-  String _toPrefix(String path) {
-    if (!path.startsWith('/tmp/')) {
-      throw ArgumentError('Path must start with /tmp/');
-    }
-    String prefix = p.normalize(path.substring(5)); // Strip /tmp/, normalize
-    return prefix.endsWith('/') ? prefix : '$prefix/';
-  }
+  bool hasAdm = false;
 
-  // CREATE: Folder using native HNS folders.insert (with recursive for parents)
   Future<void> createFolder(String folderPath, {bool recursive = true}) async {
-    final prefix = _toPrefix(folderPath); // e.g., 'user1/1/'
-    final folder = gcs.Folder()..name = prefix;
-    await _storage.folders.insert(folder, _bucket, recursive: recursive);
+    String? path;
+    if (folderPath.startsWith('/tmp/')) {
+      path = p.normalize(folderPath.substring(5));
+    }
+    final folder = gcs.Folder()..name = path!.endsWith('/') ? path : '$path/';
+
+    try {
+      await _storage.folders.insert(folder, _bucket, recursive: recursive);
+    } catch (e) {
+      if (e ==
+          DetailedApiRequestError(
+            409,
+            'The folder you tried to create already exists.',
+          )) {
+        hasAdm = true;
+      }
+    }
   }
 
-  // UPLOAD: Entire directory recursively (creates folders explicitly, uploads files)
   Future<void> uploadDirectory(
     String localDirPath,
     String remoteBasePath,
@@ -42,28 +48,24 @@ class GcsStorageService {
       remoteBasePath.endsWith('/') ? remoteBasePath : '$remoteBasePath/',
     );
 
-    // Start recursive upload from base
     await _uploadRecursive(localDir, basePrefix);
   }
 
   Future<void> _uploadRecursive(Directory dir, String remotePrefix) async {
-    // Create the current folder (recursive=true handles parents)
-    await createFolder(
-      '/tmp/$remotePrefix',
-      recursive: true,
-    ); // Prefix with /tmp/ for helper consistency
+    if (!hasAdm) {
+      await createFolder(remotePrefix, recursive: true);
+    }
 
-    // List non-recursively to handle subdirs properly
     await for (final entity in dir.list(followLinks: false)) {
+      print('entity: $entity');
       final relativePath = p.relative(entity.path, from: dir.path);
       final remotePath = p.join(remotePrefix, relativePath);
 
       if (entity is Directory) {
-        // Recurse into subdir
         await _uploadRecursive(entity, remotePath);
       } else if (entity is File) {
-        // Upload file
-        final objectName = remotePath; // No trailing / for files
+        print('file: $entity');
+        final objectName = remotePath;
         final contentType = _guessContentType(p.extension(objectName));
         final content = await entity.readAsBytes();
 
@@ -83,7 +85,6 @@ class GcsStorageService {
     }
   }
 
-  // Simple MIME guesser (extend with 'mime' package if needed)
   String _guessContentType(String extension) {
     switch (extension.toLowerCase()) {
       case '.txt':
@@ -103,15 +104,17 @@ class GcsStorageService {
     }
   }
 
-  // READ: File (download content as bytes)
   Future<Uint8List> readFile(String filePath) async {
-    final objectName = _toPrefix(
-      filePath,
-    ).replaceAll(RegExp(r'/$'), ''); // Strip trailing /
+    String? path;
+    if (filePath.startsWith('/tmp/')) {
+      path = p.normalize(filePath.substring(5));
+    }
+
+    path!.replaceAll(RegExp(r'/$'), '');
     final media =
         await _storage.objects.get(
               _bucket,
-              objectName,
+              path,
               downloadOptions: gcs.DownloadOptions.fullMedia,
             )
             as gcs.Media;
@@ -122,44 +125,45 @@ class GcsStorageService {
     return Uint8List.fromList(data);
   }
 
-  // READ: List files/folders in path (optimized for HNS with includeFoldersAsPrefixes)
   Future<List<String>> listFolder(String folderPath) async {
-    final prefix = _toPrefix(folderPath);
+    String? path;
+    if (folderPath.startsWith('/tmp/')) {
+      path = p.normalize(folderPath.substring(5));
+    }
     final listing = await _storage.objects.list(
       _bucket,
-      prefix: prefix,
+      prefix: path,
       delimiter: '/',
-      includeFoldersAsPrefixes: true, // Optimize for HNS
+      includeFoldersAsPrefixes: true,
     );
     final items = <String>[];
     for (var item in listing.items ?? []) {
-      items.add(p.basename(item.name!)); // File names
+      items.add(p.basename(item.name!));
     }
     for (var subPrefix in listing.prefixes ?? []) {
-      items.add(
-        p.basename(subPrefix.substring(0, subPrefix.length - 1)),
-      ); // Subfolder names (strip trailing /)
+      items.add(p.basename(subPrefix.substring(0, subPrefix.length - 1)));
     }
     return items;
   }
 
-  // DELETE: File
   Future<void> deleteFile(String filePath) async {
-    final objectName = _toPrefix(
-      filePath,
-    ).replaceAll(RegExp(r'/$'), ''); // Strip trailing /
-    await _storage.objects.delete(_bucket, objectName);
+    String? path;
+    if (filePath.startsWith('/tmp/')) {
+      path = p.normalize(filePath.substring(5));
+    }
+
+    path!.replaceAll(RegExp(r'/$'), '');
+    await _storage.objects.delete(_bucket, path);
   }
 
-  // DELETE: Folder (recursive: delete contents then folder)
   Future<void> deleteFolder(String folderPath) async {
-    final prefix = _toPrefix(folderPath);
+    String? path;
+    if (folderPath.startsWith('/tmp/')) {
+      path = p.normalize(folderPath.substring(5));
+    }
 
-    // Recursively delete subfolders and objects
-    await _deleteRecursive(prefix);
-
-    // Finally, delete the folder itself (must be empty)
-    await _storage.folders.delete(_bucket, prefix);
+    await _deleteRecursive(path!);
+    await _storage.folders.delete(_bucket, path);
   }
 
   Future<void> _deleteRecursive(String prefix) async {
@@ -173,12 +177,10 @@ class GcsStorageService {
         pageToken: nextPageToken,
       );
 
-      // Delete objects
       for (var item in listing.items ?? []) {
         await _storage.objects.delete(_bucket, item.name!);
       }
 
-      // Recurse into subfolders
       for (var subPrefix in listing.prefixes ?? []) {
         await _deleteRecursive(subPrefix!);
       }
@@ -186,5 +188,4 @@ class GcsStorageService {
       nextPageToken = listing.nextPageToken;
     } while (nextPageToken != null);
   }
-}  // DELETE: File
-
+}
