@@ -4,9 +4,9 @@ import 'package:essenziale_storage/admins_extract/admin_ext.dart';
 import 'package:essenziale_storage/database/crud.dart';
 import 'package:shelf/shelf.dart';
 import 'package:shelf_router/shelf_router.dart';
-import 'package:googleapis/storage/v1.dart' as storage;
+import 'package:googleapis/storage/v1.dart';
 
-Router deleteIndexRequest(storage.StorageApi gcsClient, String bucketName) {
+Router deleteIndexRequest(StorageApi gcsClient, String bucketName) {
   final handler = Router();
   handler.delete('/deleteIndex', (Request req) async {
     final adminId = req.headers['x-adminId'];

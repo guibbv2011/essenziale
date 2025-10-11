@@ -2,11 +2,11 @@ import 'dart:convert';
 
 import 'package:essenziale_storage/admins_extract/admin_ext.dart';
 import 'package:essenziale_storage/database/crud.dart';
+import 'package:googleapis/storage/v1.dart';
 import 'package:shelf/shelf.dart';
 import 'package:shelf_router/shelf_router.dart';
-import 'package:googleapis/storage/v1.dart' as storage;
 
-Router fileRequest(storage.StorageApi gcsClient, String bucketName) {
+Router fileRequest(StorageApi gcsClient, String bucketName) {
   final handler = Router();
   handler.get('/file', (Request request) async {
     final adminId = request.headers['x-adminId'];
