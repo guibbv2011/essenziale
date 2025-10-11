@@ -22,9 +22,7 @@ final _scopes = [StorageApi.devstorageReadWriteScope];
 
 Future<auth.AuthClient> getStorageClient() async {
   try {
-    final readFile = await File(
-      './essenziale-server-33738a9b4d37.json',
-    ).readAsString();
+    final readFile = await File('/key.json').readAsString();
     final jsonfile = jsonDecode(readFile) as Map<String, dynamic>;
 
     final accountCredentials = auth.ServiceAccountCredentials.fromJson(
@@ -66,9 +64,9 @@ void main() async {
   final authClient = await getStorageClient();
   gcsClient = StorageApi(authClient);
 
-  bool dir = await Directory('./tmp').exists();
+  bool dir = await Directory('/tmp').exists();
   if (!dir) {
-    await Directory('./tmp').create();
+    await Directory('/tmp').create();
   }
 
   final handler = const Pipeline()

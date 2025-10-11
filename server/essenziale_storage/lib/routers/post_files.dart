@@ -60,7 +60,7 @@ Router filesUpload(StorageApi gcsClient, String bucketName) {
           final nameFile = match.group(1)!;
 
           final File file = File(
-            'tmp/${admin.id}/$index/${nameFile.replaceFirst('/', '.')}',
+            '/tmp/${admin.id}/$index/${nameFile.replaceFirst('/', '.')}',
           );
           await file.parent.create(recursive: true);
 
@@ -78,7 +78,7 @@ Router filesUpload(StorageApi gcsClient, String bucketName) {
 
       final String remotePath = '/${admin.id}/$index';
 
-      final Directory dir = Directory('./tmp$remotePath');
+      final Directory dir = Directory('/tmp$remotePath');
       final String localFolder = dir.path;
 
       // NOTE : need to receive a return to decide if delete and retry
