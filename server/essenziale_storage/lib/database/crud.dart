@@ -11,14 +11,21 @@ class GcsStorageService {
 
   GcsStorageService(this._storage, this._bucket);
 
-  bool hasAdm = false;
+  Future<void> createFolder(String folderPath, bool recursive) async {
+    String path = _normalizePath(folderPath);
 
-  Future<void> createFolder(String folderPath, {bool recursive = true}) async {
-    String? path;
-    if (folderPath.startsWith('/tmp/')) {
-      path = p.normalize(folderPath.substring(5));
+    final bool fe = await folderExists(folderPath);
+
+    if (!fe) {
+      final folder = gcs.Folder()..name = path.endsWith('/') ? path : '$path/';
+      try {
+        await _storage.folders.insert(folder, _bucket, recursive: recursive);
+        print('Folder created: $path');
+      } catch (e) {
+        print(e);
+      }
     }
-    final folder = gcs.Folder()..name = path!.endsWith('/') ? path : '$path/';
+  }
 
     try {
       await _storage.folders.insert(folder, _bucket, recursive: recursive);
