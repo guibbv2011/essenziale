@@ -33,16 +33,15 @@ Router fileRequest(StorageApi gcsClient, String bucketName) {
 
     final String remotePathFile = '/${admin.id}/$index/$file';
 
-    GcsStorageService(gcsClient, bucketName)
-        .getFile(remotePathFile)
-        .then(
-          (onValue) {
-            return Response.ok('Response: $onValue');
-          },
-          onError: (e) {
-            return Response.internalServerError(body: 'error: $e');
-          },
-        );
+    await GcsStorageService(gcsClient, bucketName).getFile(remotePathFile);
+    // .then(
+    //   (onValue) {
+    //     return Response.ok('Response: $onValue');
+    //   },
+    //   onError: (e) {
+    //     return Response.internalServerError(body: 'error: $e');
+    //   },
+    // );
   });
   return handler;
 }
