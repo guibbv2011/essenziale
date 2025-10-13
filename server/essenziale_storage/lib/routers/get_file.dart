@@ -34,7 +34,7 @@ Router fileRequest(StorageApi gcsClient, String bucketName) {
     final String remotePathFile = '/${admin.id}/$index/$file';
 
     GcsStorageService(gcsClient, bucketName)
-        .readFile(remotePathFile)
+        .getFile(remotePathFile)
         .then(
           (onValue) {
             return Response.ok('Response: $onValue');
