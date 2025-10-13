@@ -170,6 +170,22 @@ class GcsStorageService {
     }
   }
 
+  String _normalizePath(String path) {
+    String normalized = path;
+
+    if (normalized.startsWith('/tmp/')) {
+      normalized = normalized.substring(5);
+    }
+
+    normalized = p.normalize(normalized);
+
+    if (normalized.startsWith('/')) {
+      normalized = normalized.substring(1);
+    }
+
+    return normalized;
+  }
+
   String _guessContentType(String extension) {
     switch (extension.toLowerCase()) {
       case '.txt':
@@ -177,13 +193,39 @@ class GcsStorageService {
       case '.html':
       case '.htm':
         return 'text/html';
+      case '.css':
+        return 'text/css';
+      case '.js':
+        return 'application/javascript';
+      case '.json':
+        return 'application/json';
+      case '.xml':
+        return 'application/xml';
       case '.jpg':
       case '.jpeg':
         return 'image/jpeg';
       case '.png':
         return 'image/png';
+      case '.gif':
+        return 'image/gif';
+      case '.svg':
+        return 'image/svg+xml';
+      case '.webp':
+        return 'image/webp';
       case '.pdf':
         return 'application/pdf';
+      case '.zip':
+        return 'application/zip';
+      case '.tar':
+        return 'application/x-tar';
+      case '.gz':
+        return 'application/gzip';
+      case '.mp4':
+        return 'video/mp4';
+      case '.mp3':
+        return 'audio/mpeg';
+      case '.wav':
+        return 'audio/wav';
       default:
         return 'application/octet-stream';
     }
@@ -279,5 +321,9 @@ class GcsStorageService {
 
       nextPageToken = listing.nextPageToken;
     } while (nextPageToken != null);
+  /// Checks if a folder exists
+  Future<bool> folderExists(String folderPath) async {
+    final result = await listFolder(folderPath);
+    return result.equals([]) ? false : true;
   }
 }
