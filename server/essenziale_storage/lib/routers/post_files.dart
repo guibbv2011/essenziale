@@ -72,29 +72,30 @@ Router filesUpload(StorageApi gcsClient, String bucketName) {
         }
       }
 
+      print('filenames to upload: $fileNames');
+
       if (fileNames.isEmpty) {
         return Response(400, body: 'No file uploaded');
       }
 
-      final String remotePath = '/${admin.id}/$index';
+      final String remotePath = '/${admin.id}/$index/';
 
-      final Directory dir = Directory('/tmp$remotePath');
+      final Directory dir = Directory('/tmp/${admin.id}/$index/');
       final String localFolder = dir.path;
 
-      // NOTE : need to receive a return to decide if delete and retry
-      Future<void> _ = GcsStorageService(
-        gcsClient,
-        bucketName,
-      ).uploadDirectory(localFolder, remotePath);
-
-      // Optional: Clean entire folder (delete only after all uploads are complete)
       try {
+        await GcsStorageService(
+          gcsClient,
+          bucketName,
+        ).uploadDirectory(localFolder, remotePath);
+
         await dir.delete(recursive: true);
         print('Successfully deleted folder: $remotePath');
+        return Response.ok('uploaded file\'s: $remotePath');
       } catch (e) {
         print('Failed to delete folder $remotePath: $e');
+        return Response.internalServerError(body: e);
       }
-      return Response.ok('uploaded file\'s: $remotePath');
     }
   });
 
