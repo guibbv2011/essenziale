@@ -27,15 +27,44 @@ class GcsStorageService {
     }
   }
 
+  Future<void> insertFileFromBytes(
+    Uint8List file,
+    String remoteFilePath,
+    String filename, {
+    Map<String, String>? metadata,
+  }) async {
+    final remotePath = _normalizePath(remoteFilePath);
+    final contenType = _guessContentType(p.extension(filename));
+
+    print(
+      'remoteFilePath: $remoteFilePath, remotePath: $remotePath, contenType: $contenType',
+    );
+
+    final object = gcs.Object()
+      ..contentType = contenType
+      ..metadata = metadata;
+
     try {
-      await _storage.folders.insert(folder, _bucket, recursive: recursive);
+      await _storage.objects.insert(
+        object,
+        _bucket,
+        name: filename,
+        uploadMedia: gcs.Media(
+          Stream<List<int>>.value(file),
+          file.length,
+          contentType: contenType,
+        ),
+        uploadOptions: gcs.UploadOptions.resumable,
+      );
+
+      await _storage.objects.move(_bucket, filename, '$remotePath/$filename');
+      print('File uploaded from bytes: $remoteFilePath');
     } catch (e) {
-      if (e ==
-          DetailedApiRequestError(
-            409,
-            'The folder you tried to create already exists.',
-          )) {
-        hasAdm = true;
+      print('Error uploading file from bytes: $e');
+      rethrow;
+    }
+  }
+
   Future<List<String>> listFiles(String folderPath) async {
     final path = _normalizePath(folderPath);
     final prefix = path.isEmpty ? '' : (path.endsWith('/') ? path : '$path/');
