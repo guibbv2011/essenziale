@@ -29,7 +29,39 @@ class GcsStorageService {
             'The folder you tried to create already exists.',
           )) {
         hasAdm = true;
+  Future<List<String>> listFiles(String folderPath) async {
+    final path = _normalizePath(folderPath);
+    final prefix = path.isEmpty ? '' : (path.endsWith('/') ? path : '$path/');
+
+    try {
+      final listing = await _storage.objects.list(
+        _bucket,
+        prefix: prefix,
+        delimiter: '/',
+      );
+
+      final items = <String>[];
+
+      if (listing.items != null) {
+        for (var item in listing.items!) {
+          final itemName = item.name!;
+          if (itemName.startsWith(prefix)) {
+            final relativeName = itemName.substring(prefix.length);
+            if (relativeName.isNotEmpty && !relativeName.contains('/')) {
+              items.add(relativeName);
+            }
+          }
+        }
       }
+
+      print('Listed files in: $prefix (${items.length} files)');
+      print('Files found: $items');
+      return items;
+    } catch (e, stackTrace) {
+      print('Error listing folder: $e');
+      print('Stack trace: $stackTrace');
+      print('Attempted path: $prefix');
+      rethrow;
     }
   }
 

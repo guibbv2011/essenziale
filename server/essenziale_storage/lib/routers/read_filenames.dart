@@ -32,16 +32,15 @@ Router filenamesRequest(StorageApi gcsClient, String bucketName) {
 
     final String remotePath = '/${admin.id}/$index';
 
-    GcsStorageService(gcsClient, bucketName)
-        .listFolder(remotePath)
-        .then(
-          (onValue) {
-            return Response.ok('Response: $onValue');
-          },
-          onError: (e) {
-            return Response.internalServerError(body: 'error: $e');
-          },
-        );
+    try {
+      final items = await GcsStorageService(
+        gcsClient,
+        bucketName,
+      ).listFiles(remotePath);
+      return Response.ok('Return: $items');
+    } catch (e) {
+      return Response.internalServerError(body: e);
+    }
   });
   return handler;
 }
