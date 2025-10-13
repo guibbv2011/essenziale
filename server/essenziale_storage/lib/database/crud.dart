@@ -1,8 +1,7 @@
 import 'dart:io';
 import 'dart:typed_data';
-import 'package:googleapis/siteverification/v1.dart';
+import 'package:collection/collection.dart';
 import 'package:googleapis/storage/v1.dart' as gcs;
-import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
 
 class GcsStorageService {
@@ -61,6 +60,31 @@ class GcsStorageService {
       print('File uploaded from bytes: $remoteFilePath');
     } catch (e) {
       print('Error uploading file from bytes: $e');
+      rethrow;
+    }
+  }
+
+  Future<Uint8List> getFile(String filePath) async {
+    final path = _normalizePath(filePath).replaceAll(RegExp(r'/$'), '');
+
+    try {
+      final media =
+          await _storage.objects.get(
+                _bucket,
+                path,
+                downloadOptions: gcs.DownloadOptions.fullMedia,
+              )
+              as gcs.Media;
+
+      final data = <int>[];
+      await for (final chunk in media.stream) {
+        data.addAll(chunk);
+      }
+
+      print('File retrieved: $path (${data.length} bytes)');
+      return Uint8List.fromList(data);
+    } catch (e) {
+      print('Error getting file: $e');
       rethrow;
     }
   }
