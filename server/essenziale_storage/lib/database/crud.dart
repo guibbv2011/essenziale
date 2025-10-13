@@ -65,6 +65,43 @@ class GcsStorageService {
     }
   }
 
+  Future<List<String>> listFolder(String folderPath) async {
+    final path = _normalizePath(folderPath);
+    final prefix = path.isEmpty ? '' : (path.endsWith('/') ? path : '$path/');
+
+    try {
+      final listing = await _storage.objects.list(
+        _bucket,
+        prefix: prefix,
+        delimiter: '/',
+        includeFoldersAsPrefixes: true,
+      );
+
+      final items = <String>[];
+
+      if (listing.prefixes != null) {
+        for (var subPrefix in listing.prefixes!) {
+          final folderName = subPrefix.substring(prefix.length);
+          if (folderName.isNotEmpty) {
+            final cleanName = folderName.endsWith('/')
+                ? folderName.substring(0, folderName.length - 1)
+                : folderName;
+            if (cleanName.isNotEmpty) {
+              items.add(cleanName);
+            }
+          }
+        }
+      }
+
+      return items;
+    } catch (e, stackTrace) {
+      print('Error listing folder: $e');
+      print('Stack trace: $stackTrace');
+      print('Attempted path: $prefix');
+      rethrow;
+    }
+  }
+
   Future<void> uploadDirectory(
     String localDirPath,
     String remoteBasePath,
@@ -192,6 +229,13 @@ class GcsStorageService {
     String? path;
     if (folderPath.startsWith('/tmp/')) {
       path = p.normalize(folderPath.substring(5));
+  /// Checks if a folder exists
+  Future<bool> folderExists(String folderPath) async {
+    try {
+      final _ = await listFolder(folderPath);
+      return true;
+    } catch (e) {
+      return false;
     }
 
     await _deleteRecursive(path!);
