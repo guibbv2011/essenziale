@@ -64,25 +64,26 @@ class GcsStorageService {
     }
   }
 
-  Future<Uint8List> getFile(String filePath) async {
+  Future<void> getFile(String filePath) async {
     final path = _normalizePath(filePath).replaceAll(RegExp(r'/$'), '');
 
     try {
-      final media =
-          await _storage.objects.get(
-                _bucket,
-                path,
-                downloadOptions: gcs.DownloadOptions.fullMedia,
-              )
-              as gcs.Media;
+      final media = await _storage.objects.get(
+        _bucket,
+        path,
+        downloadOptions: gcs.DownloadOptions.fullMedia,
+      );
 
-      final data = <int>[];
-      await for (final chunk in media.stream) {
-        data.addAll(chunk);
+      // final data = [];
+      await for (final chunk in Stream.value(media)) {
+        // data.addAll(chunk);
+        print('chunk: $chunk');
       }
 
-      print('File retrieved: $path (${data.length} bytes)');
-      return Uint8List.fromList(data);
+      // print('File retrieved: $path (${data.length} bytes)');
+      // return Uint8List.fromList(data);
+
+      // return chunk;
     } catch (e) {
       print('Error getting file: $e');
       rethrow;
