@@ -149,43 +149,23 @@ class GcsStorageService {
       );
     }
 
-    final basePrefix = p.normalize(
-      remoteBasePath.endsWith('/') ? remoteBasePath : '$remoteBasePath/',
-    );
-
-    await _uploadRecursive(localDir, basePrefix);
+    // final basePrefix = _normalizePath(remoteBasePath);
+    await _uploadRecursive(localDir, remoteBasePath);
+    print('Directory uploaded: $localDirPath -> $remoteBasePath');
   }
 
   Future<void> _uploadRecursive(Directory dir, String remotePrefix) async {
-    if (!hasAdm) {
-      await createFolder(remotePrefix, recursive: true);
-    }
+    for (final entity in dir.listSync(followLinks: false)) {
+      final filename = p.relative(entity.path, from: dir.path);
+      // final remotePath = p.join(remotePrefix, filename);
 
-    await for (final entity in dir.list(followLinks: false)) {
-      print('entity: $entity');
-      final relativePath = p.relative(entity.path, from: dir.path);
-      final remotePath = p.join(remotePrefix, relativePath);
+      if (entity is File) {
+        print('entity absolute: ${entity.parent.path}');
 
-      if (entity is Directory) {
-        await _uploadRecursive(entity, remotePath);
-      } else if (entity is File) {
-        print('file: $entity');
-        final objectName = remotePath;
-        final contentType = _guessContentType(p.extension(objectName));
-        final content = await entity.readAsBytes();
+        await createFolder(entity.parent.path, true);
 
-        final object = gcs.Object()
-          ..name = objectName
-          ..contentType = contentType;
-
-        await _storage.objects.insert(
-          object,
-          _bucket,
-          uploadMedia: gcs.Media(
-            http.ByteStream.fromBytes(content),
-            content.length,
-          ),
-        );
+        final Uint8List file = await File(entity.uri.path).readAsBytes();
+        await insertFileFromBytes(file, entity.parent.path, filename);
       }
     }
   }
