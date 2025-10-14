@@ -44,11 +44,11 @@ Future<auth.AuthClient> getStorageClient() async {
 }
 
 final Map<String, Handler> dynamicRoutes = {
-  'deleteIndex': deleteIndexRequest(gcsClient, bucketName),
-  'deleteFile': deleteFileRequest(gcsClient, bucketName),
-  'filenames': filenamesRequest(gcsClient, bucketName),
-  'media': filesUpload(gcsClient, bucketName),
   '.*': fileRequest(gcsClient, bucketName),
+  'media': filesUpload(gcsClient, bucketName),
+  'filenames': filenamesRequest(gcsClient, bucketName),
+  'deleteFile': deleteFileRequest(gcsClient, bucketName),
+  'deleteIndex': deleteIndexRequest(gcsClient, bucketName),
 };
 
 Handler get router {

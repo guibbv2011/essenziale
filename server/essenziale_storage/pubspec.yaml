@@ -17,7 +17,7 @@ dependencies:
   shelf_static: ^1.1.3
   googleapis: ^15.0.0
   googleapis_auth: ^2.0.0
-  shelf_dynamic_forwarder: ^1.0.2
+  shelf_dynamic_forwarder: ^1.1.2
   http: ^1.5.0
 
 dev_dependencies:

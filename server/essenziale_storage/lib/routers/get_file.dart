@@ -8,7 +8,7 @@ import 'package:shelf_router/shelf_router.dart';
 
 Router fileRequest(StorageApi gcsClient, String bucketName) {
   final handler = Router();
-  handler.get('/file', (Request request) async {
+  handler.get('/.*', (Request request) async {
     final adminId = request.headers['x-adminId'];
     final index = request.headers['x-index'];
     final file = request.headers['x-path'];
@@ -33,15 +33,16 @@ Router fileRequest(StorageApi gcsClient, String bucketName) {
 
     final String remotePathFile = '/${admin.id}/$index/$file';
 
-    await GcsStorageService(gcsClient, bucketName).getFile(remotePathFile);
-    // .then(
-    //   (onValue) {
-    //     return Response.ok('Response: $onValue');
-    //   },
-    //   onError: (e) {
-    //     return Response.internalServerError(body: 'error: $e');
-    //   },
-    // );
+    try {
+      final item = await GcsStorageService(
+        gcsClient,
+        bucketName,
+      ).getFile(remotePathFile);
+
+      return Response.ok(item);
+    } catch (e) {
+      return Response.internalServerError(body: e);
+    }
   });
   return handler;
 }
