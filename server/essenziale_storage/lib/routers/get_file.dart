@@ -31,7 +31,7 @@ Router fileRequest(StorageApi gcsClient, String bucketName) {
       );
     }
 
-    final String remotePathFile = '/${admin.id}/$index/$file';
+    final String remotePathFile = '${admin.id}-$index-$file';
 
     try {
       final item = await GcsStorageService(
@@ -46,3 +46,5 @@ Router fileRequest(StorageApi gcsClient, String bucketName) {
   });
   return handler;
 }
+
+// TODO : follow new pattern of interaction with GCS

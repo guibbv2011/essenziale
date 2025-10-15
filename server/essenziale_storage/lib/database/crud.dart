@@ -1,6 +1,4 @@
-// import 'dart:io';
 import 'dart:typed_data';
-import 'package:collection/collection.dart';
 import 'package:googleapis/storage/v1.dart' as gcs;
 import 'package:path/path.dart' as p;
 
@@ -59,13 +57,11 @@ class GcsStorageService {
   }
 
   Future<Uint8List> getFile(String filePath) async {
-    final path = _normalizePath(filePath).replaceAll(RegExp(r'/$'), '');
-
     try {
       final media =
           await _storage.objects.get(
                 _bucket,
-                path,
+                filePath,
                 downloadOptions: gcs.DownloadOptions.fullMedia,
               )
               as gcs.Media;
@@ -76,7 +72,7 @@ class GcsStorageService {
       }
 
       final bytes = builder.takeBytes();
-      print('File retrieved: $path (${bytes.length} bytes)');
+      print('File retrieved: $filePath (${bytes.length} bytes)');
       return bytes;
     } catch (e) {
       print('Error getting file: $e');
