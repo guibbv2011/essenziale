@@ -30,12 +30,13 @@ Router deleteIndexRequest(StorageApi gcsClient, String bucketName) {
       );
     }
 
-    final String remotePath = '/${admin.id}/$index';
+    final String remotePath = '${admin.id}-$index';
 
-    // NOTE : need a return
-    GcsStorageService(gcsClient, bucketName).deleteFolder(remotePath);
+    GcsStorageService(gcsClient, bucketName).deleteIndex(remotePath);
 
     return Response.ok('Response: $remotePath successful deleted');
   });
   return handler;
 }
+
+// TODO : follow new pattern of interaction with GCS

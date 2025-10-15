@@ -31,12 +31,13 @@ Router deleteFileRequest(StorageApi gcsClient, String bucketName) {
       );
     }
 
-    final String remotePathFile = '${admin.id}/$index/$file';
+    final String remotePathFile = '${admin.id}-$index-$file';
 
-    // NOTE : need a return
     GcsStorageService(gcsClient, bucketName).deleteFile(remotePathFile);
 
     return Response.ok('Response: $file successful deleted');
   });
   return handler;
 }
+
+// TODO : follow new pattern of interaction with GCS

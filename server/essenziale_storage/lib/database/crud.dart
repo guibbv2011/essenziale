@@ -108,35 +108,12 @@ class GcsStorageService {
     final path = _normalizePath(folderPath);
     final prefix = path.isEmpty ? '' : (path.endsWith('/') ? path : '$path/');
 
+  Future<void> deleteFile(String filePath) async {
     try {
-      final listing = await _storage.objects.list(
-        _bucket,
-        prefix: prefix,
-        delimiter: '/',
-        includeFoldersAsPrefixes: true,
-      );
-
-      final items = <String>[];
-
-      if (listing.prefixes != null) {
-        for (var subPrefix in listing.prefixes!) {
-          final folderName = subPrefix.substring(prefix.length);
-          if (folderName.isNotEmpty) {
-            final cleanName = folderName.endsWith('/')
-                ? folderName.substring(0, folderName.length - 1)
-                : folderName;
-            if (cleanName.isNotEmpty) {
-              items.add(cleanName);
-            }
-          }
-        }
-      }
-
-      return items;
-    } catch (e, stackTrace) {
-      print('Error listing folder: $e');
-      print('Stack trace: $stackTrace');
-      print('Attempted path: $prefix');
+      await _storage.objects.delete(_bucket, filePath);
+      print('File deleted: $filePath');
+    } catch (e) {
+      print('Error deleting file: $e');
       rethrow;
     }
   }
@@ -166,10 +143,19 @@ class GcsStorageService {
         print('entity absolute: ${entity.parent.path}');
 
         await createFolder(entity.parent.path, true);
+  Future<void> deleteIndex(String indexPath) async {
+    List<String> listingFiles = await listFiles(indexPath);
 
         final Uint8List file = await File(entity.uri.path).readAsBytes();
         await insertFileFromBytes(file, entity.parent.path, filename);
+    try {
+      for (String file in listingFiles) {
+        await deleteFile(file);
       }
+      print('Folder deleted: $indexPath');
+    } catch (e) {
+      print('Error deleting folder: $e');
+      rethrow;
     }
   }
 
