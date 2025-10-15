@@ -1,7 +1,5 @@
-import 'dart:io';
 import 'dart:typed_data';
 import 'package:googleapis/storage/v1.dart' as gcs;
-import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
 
 class GcsStorageService {
@@ -10,181 +8,130 @@ class GcsStorageService {
 
   GcsStorageService(this._storage, this._bucket);
 
-  // Helper: Normalize path to GCS prefix (strip /tmp/ and ensure trailing / for folders)
-  String _toPrefix(String path) {
-    if (!path.startsWith('/tmp/')) {
-      throw ArgumentError('Path must start with /tmp/');
-    }
-    String prefix = p.normalize(path.substring(5)); // Strip /tmp/, normalize
-    return prefix.endsWith('/') ? prefix : '$prefix/';
-  }
+  Future<void> insertFileFromBytes(
+    Uint8List file,
+    String remoteFilePath,
+    String filename, {
+    Map<String, String>? metadata,
+  }) async {
+    final contenType = _guessContentType(p.extension(filename));
 
-  // CREATE: Folder using native HNS folders.insert (with recursive for parents)
-  Future<void> createFolder(String folderPath, {bool recursive = true}) async {
-    final prefix = _toPrefix(folderPath); // e.g., 'user1/1/'
-    final folder = gcs.Folder()..name = prefix;
-    await _storage.folders.insert(folder, _bucket, recursive: recursive);
-  }
+    final object = gcs.Object()
+      ..contentType = contenType
+      ..metadata = metadata;
 
-  // UPLOAD: Entire directory recursively (creates folders explicitly, uploads files)
-  Future<void> uploadDirectory(
-    String localDirPath,
-    String remoteBasePath,
-  ) async {
-    final localDir = Directory(localDirPath);
-    if (!await localDir.exists()) {
-      throw FileSystemException(
-        'Local directory does not exist: $localDirPath',
+    try {
+      await _storage.objects.insert(
+        object,
+        _bucket,
+        name: remoteFilePath,
+        uploadMedia: gcs.Media(
+          Stream<List<int>>.value(file),
+          file.length,
+          contentType: contenType,
+        ),
+        uploadOptions: gcs.UploadOptions.resumable,
       );
+
+      print('File uploaded from bytes: $filename');
+    } catch (e) {
+      print('Error uploading file from bytes: $e');
+      rethrow;
     }
-
-    final basePrefix = p.normalize(
-      remoteBasePath.endsWith('/') ? remoteBasePath : '$remoteBasePath/',
-    );
-
-    // Start recursive upload from base
-    await _uploadRecursive(localDir, basePrefix);
   }
 
-  Future<void> _uploadRecursive(Directory dir, String remotePrefix) async {
-    // Create the current folder (recursive=true handles parents)
-    await createFolder(
-      '/tmp/$remotePrefix',
-      recursive: true,
-    ); // Prefix with /tmp/ for helper consistency
+  Future<Uint8List> getFile(String filePath) async {
+    try {
+      final media =
+          await _storage.objects.get(
+                _bucket,
+                filePath,
+                downloadOptions: gcs.DownloadOptions.fullMedia,
+              )
+              as gcs.Media;
 
-    // List non-recursively to handle subdirs properly
-    await for (final entity in dir.list(followLinks: false)) {
-      final relativePath = p.relative(entity.path, from: dir.path);
-      final remotePath = p.join(remotePrefix, relativePath);
-
-      if (entity is Directory) {
-        // Recurse into subdir
-        await _uploadRecursive(entity, remotePath);
-      } else if (entity is File) {
-        // Upload file
-        final objectName = remotePath; // No trailing / for files
-        final contentType = _guessContentType(p.extension(objectName));
-        final content = await entity.readAsBytes();
-
-        final object = gcs.Object()
-          ..name = objectName
-          ..contentType = contentType;
-
-        await _storage.objects.insert(
-          object,
-          _bucket,
-          uploadMedia: gcs.Media(
-            http.ByteStream.fromBytes(content),
-            content.length,
-          ),
-        );
+      final builder = BytesBuilder(copy: false);
+      await for (final chunk in media.stream) {
+        builder.add(chunk);
       }
+
+      final bytes = builder.takeBytes();
+      print('File retrieved: $filePath (${bytes.length} bytes)');
+      return bytes;
+    } catch (e) {
+      print('Error getting file: $e');
+      rethrow;
     }
   }
 
-  // Simple MIME guesser (extend with 'mime' package if needed)
+  Future<List<String>> listFiles(String indexPath) async {
+    try {
+      final listing = await _storage.objects.list(_bucket, prefix: indexPath);
+
+      final items = <String>[];
+
+      if (listing.items == null) return [];
+
+      for (var item in listing.items!) {
+        if (item.name!.startsWith(indexPath) &&
+            item.name!.length > indexPath.length) {
+          items.add(item.name!);
+        }
+      }
+
+      print('Files found: $items');
+      return items;
+    } catch (e, stackTrace) {
+      print('Error listing folder: $e');
+      print('Stack trace: $stackTrace');
+      rethrow;
+    }
+  }
+
+  Future<void> deleteFile(String filePath) async {
+    try {
+      await _storage.objects.delete(_bucket, filePath);
+      print('File deleted: $filePath');
+    } catch (e) {
+      print('Error deleting file: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> deleteIndex(String indexPath) async {
+    List<String> listingFiles = await listFiles(indexPath);
+
+    try {
+      for (String file in listingFiles) {
+        await deleteFile(file);
+      }
+      print('Folder deleted: $indexPath');
+    } catch (e) {
+      print('Error deleting folder: $e');
+      rethrow;
+    }
+  }
+
   String _guessContentType(String extension) {
     switch (extension.toLowerCase()) {
-      case '.txt':
-        return 'text/plain';
-      case '.html':
-      case '.htm':
-        return 'text/html';
       case '.jpg':
+        return 'image/jpeg';
       case '.jpeg':
         return 'image/jpeg';
       case '.png':
         return 'image/png';
+      case '.gif':
+        return 'image/gif';
+      case '.svg':
+        return 'image/svg+xml';
+      case '.webp':
+        return 'image/webp';
       case '.pdf':
         return 'application/pdf';
+      case '.mp4':
+        return 'video/mp4';
       default:
         return 'application/octet-stream';
     }
   }
-
-  // READ: File (download content as bytes)
-  Future<Uint8List> readFile(String filePath) async {
-    final objectName = _toPrefix(
-      filePath,
-    ).replaceAll(RegExp(r'/$'), ''); // Strip trailing /
-    final media =
-        await _storage.objects.get(
-              _bucket,
-              objectName,
-              downloadOptions: gcs.DownloadOptions.fullMedia,
-            )
-            as gcs.Media;
-    final data = <int>[];
-    await for (final chunk in media.stream) {
-      data.addAll(chunk);
-    }
-    return Uint8List.fromList(data);
-  }
-
-  // READ: List files/folders in path (optimized for HNS with includeFoldersAsPrefixes)
-  Future<List<String>> listFolder(String folderPath) async {
-    final prefix = _toPrefix(folderPath);
-    final listing = await _storage.objects.list(
-      _bucket,
-      prefix: prefix,
-      delimiter: '/',
-      includeFoldersAsPrefixes: true, // Optimize for HNS
-    );
-    final items = <String>[];
-    for (var item in listing.items ?? []) {
-      items.add(p.basename(item.name!)); // File names
-    }
-    for (var subPrefix in listing.prefixes ?? []) {
-      items.add(
-        p.basename(subPrefix.substring(0, subPrefix.length - 1)),
-      ); // Subfolder names (strip trailing /)
-    }
-    return items;
-  }
-
-  // DELETE: File
-  Future<void> deleteFile(String filePath) async {
-    final objectName = _toPrefix(
-      filePath,
-    ).replaceAll(RegExp(r'/$'), ''); // Strip trailing /
-    await _storage.objects.delete(_bucket, objectName);
-  }
-
-  // DELETE: Folder (recursive: delete contents then folder)
-  Future<void> deleteFolder(String folderPath) async {
-    final prefix = _toPrefix(folderPath);
-
-    // Recursively delete subfolders and objects
-    await _deleteRecursive(prefix);
-
-    // Finally, delete the folder itself (must be empty)
-    await _storage.folders.delete(_bucket, prefix);
-  }
-
-  Future<void> _deleteRecursive(String prefix) async {
-    String? nextPageToken;
-    do {
-      final listing = await _storage.objects.list(
-        _bucket,
-        prefix: prefix,
-        delimiter: '/',
-        includeFoldersAsPrefixes: true,
-        pageToken: nextPageToken,
-      );
-
-      // Delete objects
-      for (var item in listing.items ?? []) {
-        await _storage.objects.delete(_bucket, item.name!);
-      }
-
-      // Recurse into subfolders
-      for (var subPrefix in listing.prefixes ?? []) {
-        await _deleteRecursive(subPrefix!);
-      }
-
-      nextPageToken = listing.nextPageToken;
-    } while (nextPageToken != null);
-  }
-}  // DELETE: File
-
+}

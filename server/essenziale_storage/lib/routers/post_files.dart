@@ -1,15 +1,13 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:essenziale_storage/admins_extract/admin_ext.dart';
 import 'package:essenziale_storage/database/crud.dart';
-// import 'package:path/path.dart' as p;
 import 'package:shelf/shelf.dart';
 import 'package:shelf_multipart/shelf_multipart.dart';
 import 'package:shelf_router/shelf_router.dart';
-import 'package:googleapis/storage/v1.dart' as storage;
+import 'package:googleapis/storage/v1.dart';
 
-Router filesUpload(storage.StorageApi gcsClient, String bucketName) {
+Router filesUpload(StorageApi gcsClient, String bucketName) {
   final handler = Router();
   handler.post('/media', (Request request) async {
     final adminId = request.headers['x-adminId'];
@@ -60,14 +58,18 @@ Router filesUpload(storage.StorageApi gcsClient, String bucketName) {
           }
           final nameFile = match.group(1)!;
 
-          final File file = File(
-            'tmp/${admin.id}/$index/${nameFile.replaceFirst('/', '.')}',
-          );
-          await file.parent.create(recursive: true);
+          final String remoteNameFile =
+              '${admin.id}-$index-${nameFile.replaceFirst('/', '.')}';
 
-          final sink = file.openWrite();
-          await field.part.pipe(sink);
-          await sink.close();
+          try {
+            await GcsStorageService(gcsClient, bucketName).insertFileFromBytes(
+              await field.part.readBytes(),
+              remoteNameFile,
+              nameFile,
+            );
+          } catch (e) {
+            return Response.internalServerError(body: e);
+          }
 
           fileNames.add(nameFile);
         }
@@ -77,25 +79,7 @@ Router filesUpload(storage.StorageApi gcsClient, String bucketName) {
         return Response(400, body: 'No file uploaded');
       }
 
-      final String remotePath = '/${admin.id}/$index';
-
-      final Directory dir = Directory('./tmp$remotePath');
-      final String localFolder = dir.path;
-
-      // NOTE : need to receive a return to decide if delete and retry
-      Future<void> _ = GcsStorageService(
-        gcsClient,
-        bucketName,
-      ).uploadDirectory(localFolder, remotePath);
-
-      // Optional: Clean entire folder (delete only after all uploads are complete)
-      try {
-        await dir.delete(recursive: true);
-        print('Successfully deleted folder: $remotePath');
-      } catch (e) {
-        print('Failed to delete folder $remotePath: $e');
-      }
-      return Response.ok('uploaded file\'s: $remotePath');
+      return Response.ok('uploaded file\'s: $fileNames');
     }
   });
 

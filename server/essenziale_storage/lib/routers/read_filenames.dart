@@ -4,9 +4,9 @@ import 'package:essenziale_storage/admins_extract/admin_ext.dart';
 import 'package:essenziale_storage/database/crud.dart';
 import 'package:shelf/shelf.dart';
 import 'package:shelf_router/shelf_router.dart';
-import 'package:googleapis/storage/v1.dart' as storage;
+import 'package:googleapis/storage/v1.dart';
 
-Router filenamesRequest(storage.StorageApi gcsClient, String bucketName) {
+Router filenamesRequest(StorageApi gcsClient, String bucketName) {
   final handler = Router();
   handler.get('/filenames', (Request req) async {
     final adminId = req.headers['x-adminId'];
@@ -30,18 +30,17 @@ Router filenamesRequest(storage.StorageApi gcsClient, String bucketName) {
       );
     }
 
-    final String remotePath = '/${admin.id}/$index';
+    final String remotePath = '${admin.id}-$index';
 
-    GcsStorageService(gcsClient, bucketName)
-        .listFolder(remotePath)
-        .then(
-          (onValue) {
-            return Response.ok('Response: $onValue');
-          },
-          onError: (e) {
-            return Response.internalServerError(body: 'error: $e');
-          },
-        );
+    try {
+      final items = await GcsStorageService(
+        gcsClient,
+        bucketName,
+      ).listFiles(remotePath);
+      return Response.ok('Return: $items');
+    } catch (e) {
+      return Response.internalServerError(body: e);
+    }
   });
   return handler;
 }
