@@ -84,28 +84,18 @@ class GcsStorageService {
     }
   }
 
-  Future<List<String>> listFiles(String folderPath) async {
-    final path = _normalizePath(folderPath);
-    final prefix = path.isEmpty ? '' : (path.endsWith('/') ? path : '$path/');
-
+  Future<List<String>> listFiles(String indexPath) async {
     try {
-      final listing = await _storage.objects.list(
-        _bucket,
-        prefix: prefix,
-        delimiter: '/',
-      );
+      final listing = await _storage.objects.list(_bucket, prefix: indexPath);
 
       final items = <String>[];
 
-      if (listing.items != null) {
-        for (var item in listing.items!) {
-          final itemName = item.name!;
-          if (itemName.startsWith(prefix)) {
-            final relativeName = itemName.substring(prefix.length);
-            if (relativeName.isNotEmpty && !relativeName.contains('/')) {
-              items.add(relativeName);
-            }
-          }
+      if (listing.items == null) return [];
+
+      for (var item in listing.items!) {
+        if (item.name!.startsWith(indexPath) &&
+            item.name!.length > indexPath.length) {
+          items.add(item.name!);
         }
       }
 
@@ -114,7 +104,6 @@ class GcsStorageService {
     } catch (e, stackTrace) {
       print('Error listing folder: $e');
       print('Stack trace: $stackTrace');
-      print('Attempted path: $prefix');
       rethrow;
     }
   }

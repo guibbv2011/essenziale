@@ -30,7 +30,7 @@ Router filenamesRequest(StorageApi gcsClient, String bucketName) {
       );
     }
 
-    final String remotePath = '/${admin.id}/$index';
+    final String remotePath = '${admin.id}-$index';
 
     try {
       final items = await GcsStorageService(
