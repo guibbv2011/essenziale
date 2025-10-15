@@ -1,4 +1,4 @@
-import 'dart:io';
+// import 'dart:io';
 import 'dart:typed_data';
 import 'package:collection/collection.dart';
 import 'package:googleapis/storage/v1.dart' as gcs;
@@ -32,12 +32,7 @@ class GcsStorageService {
     String filename, {
     Map<String, String>? metadata,
   }) async {
-    final remotePath = _normalizePath(remoteFilePath);
     final contenType = _guessContentType(p.extension(filename));
-
-    print(
-      'remoteFilePath: $remoteFilePath, remotePath: $remotePath, contenType: $contenType',
-    );
 
     final object = gcs.Object()
       ..contentType = contenType
@@ -47,7 +42,7 @@ class GcsStorageService {
       await _storage.objects.insert(
         object,
         _bucket,
-        name: filename,
+        name: remoteFilePath,
         uploadMedia: gcs.Media(
           Stream<List<int>>.value(file),
           file.length,
@@ -56,8 +51,7 @@ class GcsStorageService {
         uploadOptions: gcs.UploadOptions.resumable,
       );
 
-      await _storage.objects.move(_bucket, filename, '$remotePath/$filename');
-      print('File uploaded from bytes: $remoteFilePath');
+      print('File uploaded from bytes: $filename');
     } catch (e) {
       print('Error uploading file from bytes: $e');
       rethrow;
@@ -115,7 +109,6 @@ class GcsStorageService {
         }
       }
 
-      print('Listed files in: $prefix (${items.length} files)');
       print('Files found: $items');
       return items;
     } catch (e, stackTrace) {

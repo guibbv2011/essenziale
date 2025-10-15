@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:essenziale_storage/admins_extract/admin_ext.dart';
 import 'package:essenziale_storage/database/crud.dart';
@@ -59,43 +58,28 @@ Router filesUpload(StorageApi gcsClient, String bucketName) {
           }
           final nameFile = match.group(1)!;
 
-          final File file = File(
-            '/tmp/${admin.id}/$index/${nameFile.replaceFirst('/', '.')}',
-          );
-          await file.parent.create(recursive: true);
+          final String remoteNameFile =
+              '${admin.id}-$index-${nameFile.replaceFirst('/', '.')}';
 
-          final sink = file.openWrite();
-          await field.part.pipe(sink);
-          await sink.close();
+          try {
+            await GcsStorageService(gcsClient, bucketName).insertFileFromBytes(
+              await field.part.readBytes(),
+              remoteNameFile,
+              nameFile,
+            );
+          } catch (e) {
+            return Response.internalServerError(body: e);
+          }
 
           fileNames.add(nameFile);
         }
       }
 
-      print('filenames to upload: $fileNames');
-
       if (fileNames.isEmpty) {
         return Response(400, body: 'No file uploaded');
       }
 
-      final String remotePath = '/${admin.id}/$index/';
-
-      final Directory dir = Directory('/tmp/${admin.id}/$index/');
-      final String localFolder = dir.path;
-
-      try {
-        await GcsStorageService(
-          gcsClient,
-          bucketName,
-        ).uploadDirectory(localFolder, remotePath);
-
-        await dir.delete(recursive: true);
-        print('Successfully deleted folder: $remotePath');
-        return Response.ok('uploaded file\'s: $remotePath');
-      } catch (e) {
-        print('Failed to delete folder $remotePath: $e');
-        return Response.internalServerError(body: e);
-      }
+      return Response.ok('uploaded file\'s: $fileNames');
     }
   });
 
