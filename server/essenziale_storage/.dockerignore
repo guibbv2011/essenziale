@@ -7,6 +7,3 @@ analysis_options.yaml
 .dart_tool
 pubspec.lock 
 CHANGELOG.md
-shelf-sa-key.json
-service-account-key.json/
-*.json
